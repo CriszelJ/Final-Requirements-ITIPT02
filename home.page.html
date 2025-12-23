@@ -1,0 +1,165 @@
+<input type="file" #fileInput accept="image/*" hidden (change)="handleFileInput($event)" />
+
+<ion-menu contentId="main-content">
+  <ion-header class="ion-no-border">
+    <ion-toolbar class="menu-toolbar">
+      <ion-title>
+        <span style="color: #F4B400; font-weight: bold;">Keep</span> Notes
+      </ion-title>
+    </ion-toolbar>
+  </ion-header>
+
+  <ion-content class="menu-content">
+    <div class="menu-items">
+      <ion-item button detail="false" (click)="switchView('notes')" [class.selected]="currentView === 'notes'">
+        <ion-icon slot="start" name="bulb-outline"></ion-icon>
+        <ion-label>Notes</ion-label>
+      </ion-item>
+      <ion-item button detail="false" (click)="switchView('archive')" [class.selected]="currentView === 'archive'">
+        <ion-icon slot="start" name="archive-outline"></ion-icon>
+        <ion-label>Archive</ion-label>
+      </ion-item>
+      <ion-item button detail="false" (click)="switchView('trash')" [class.selected]="currentView === 'trash'">
+        <ion-icon slot="start" name="trash-outline"></ion-icon>
+        <ion-label>Trash</ion-label>
+      </ion-item>
+    </div>
+  </ion-content>
+</ion-menu>
+
+<div id="main-content" class="ion-page">
+  @if (!isInputExpanded) {
+  <div class="dashboard-view" style="height: 100%; display: flex; flex-direction: column;">
+    
+    <ion-header class="ion-no-border header-container">
+      <div class="search-bar-wrapper">
+        <ion-buttons>
+          <ion-menu-button color="medium"></ion-menu-button>
+        </ion-buttons>
+        
+        <div style="flex: 1; display: flex; align-items: center;">
+          @if (currentView === 'notes'){
+             <input type="text" placeholder="Search your notes" [(ngModel)]="searchQuery" />
+          } @else {
+             <div class="view-title">{{ getViewTitle() }}</div>
+          }
+        </div>
+
+        <ion-buttons slot="end">
+           <ion-button (click)="toggleTheme()" color="medium">
+             <ion-icon slot="icon-only" [name]="isDarkMode ? 'sunny-outline' : 'moon-outline'"></ion-icon>
+           </ion-button>
+        </ion-buttons>
+      </div>
+    </ion-header>
+
+    <ion-content class="main-scroll">
+      <div class="notes-grid">
+        @for (note of displayedNotes; track note.id) {
+          <div class="note-card" [style.background-color]="note.color" (click)="currentView === 'notes' ? openEditor(note) : null">
+            
+            @if (note.image) {
+              <img [src]="note.image" class="note-image" />
+            }
+
+            <div class="note-inner">
+              <div class="title-row">
+                 @if (note.title) { <h3>{{ note.title }}</h3> }
+                 @if (note.isPinned && currentView === 'notes') { <ion-icon name="pin" class="pin-icon"></ion-icon> }
+              </div>
+              @if (note.content) { 
+                <p [style.text-decoration]="currentView === 'trash' ? 'line-through' : 'none'"
+                   [style.opacity]="currentView === 'trash' ? '0.7' : '1'">
+                  {{ note.content }}
+                </p> 
+              } 
+            </div>
+            
+            <div class="note-footer">
+               @if (currentView === 'notes') {
+                 <ion-button fill="clear" size="small" (click)="presentColorPalette($event, note)">
+                   <ion-icon name="color-palette-outline" color="medium"></ion-icon>
+                 </ion-button>
+                 <ion-button fill="clear" size="small" (click)="triggerImageUpload(fileInput, $event, note)">
+                   <ion-icon name="image-outline" color="medium"></ion-icon>
+                 </ion-button>
+                 <ion-button fill="clear" size="small" (click)="archiveNote($event, note.id)">
+                   <ion-icon name="archive-outline" color="medium"></ion-icon>
+                 </ion-button>
+                 <ion-button fill="clear" size="small" (click)="trashNote($event, note.id)">
+                   <ion-icon name="trash-outline" color="medium"></ion-icon>
+                 </ion-button>
+               }
+
+               @if (currentView !== 'notes') {
+                 <ion-button fill="clear" size="small" (click)="restoreNote($event, note.id)">
+                   <ion-icon name="refresh-outline" color="medium"></ion-icon>
+                 </ion-button>
+
+                 @if (currentView === 'archive') {
+                    <ion-button fill="clear" size="small" (click)="trashNote($event, note.id)">
+                      <ion-icon name="trash-outline" color="medium"></ion-icon>
+                    </ion-button>
+                 } @else if (currentView === 'trash') {
+                    <ion-button fill="clear" size="small" (click)="deleteForever($event, note.id)">
+                      <ion-icon name="close-circle-outline" color="danger"></ion-icon>
+                    </ion-button>
+                 }
+               }
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (displayedNotes.length === 0) {
+        <div class="empty-state">
+          <ion-icon [name]="currentView === 'notes' ? 'bulb-outline' : (currentView === 'archive' ? 'archive-outline' : 'trash-outline')"></ion-icon>
+          <p>{{ getEmptyStateMessage() }}</p>
+        </div>
+      }
+
+      @if (currentView === 'notes'){
+        <ion-fab vertical="bottom" horizontal="end" slot="fixed" class="custom-fab">
+          <ion-fab-button class="google-fab" (click)="openEditor()">
+            <ion-icon name="add-outline" size="large"></ion-icon>
+          </ion-fab-button>
+        </ion-fab>
+      }
+    </ion-content>
+  </div>
+  }
+
+  @if (isInputExpanded){
+    <div class="fullscreen-editor ion-page" [style.background-color]="currentColor === 'transparent' ? 'var(--editor-bg)' : currentColor">
+      <div class="editor-toolbar">
+        <ion-button fill="clear" color="medium" (click)="cancelEdit()">
+          <ion-icon slot="icon-only" name="arrow-back-outline"></ion-icon>
+        </ion-button>
+        <div class="spacer"></div>
+        <ion-button fill="clear" color="medium" (click)="togglePin(null)">
+          <ion-icon slot="icon-only" [name]="currentIsPinned ? 'pin' : 'pin-outline'" [color]="currentIsPinned ? 'primary' : 'medium'"></ion-icon>
+        </ion-button>
+      </div>
+
+      <div class="editor-content">
+        @if(currentImage) {
+          <img [src]="currentImage" class="editor-image-preview" />
+        }
+        <ion-input class="editor-title" placeholder="Title" [(ngModel)]="currentTitle"></ion-input>
+        <ion-textarea class="editor-body" placeholder="Note" autoGrow="true" [(ngModel)]="currentContent"></ion-textarea>
+      </div>
+
+      <div class="editor-footer" [style.background-color]="currentColor === 'transparent' ? 'var(--editor-bg)' : currentColor">
+        <ion-button fill="clear" color="medium" (click)="triggerImageUpload(fileInput)">
+          <ion-icon slot="start" name="image-outline"></ion-icon>
+        </ion-button>
+        <ion-button fill="clear" color="medium" (click)="presentColorPalette($event)">
+          <ion-icon slot="start" name="color-palette-outline"></ion-icon>
+        </ion-button>
+        <div class="spacer"></div>
+        <ion-button color="medium" fill="clear" (click)="cancelEdit()">Cancel</ion-button>
+        <ion-button color="warning" (click)="saveNote()">Save</ion-button>
+      </div>
+    </div>
+  }
+</div>
